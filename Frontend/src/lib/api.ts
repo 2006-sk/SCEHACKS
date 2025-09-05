@@ -19,55 +19,52 @@ export type Candidate = {
   skills: string[];
   interests: string[];
   availability: string;
+  blurb?: string;
 };
 
 export type Match = {
   candidate: Candidate;
-  score: number;
+  score: number;            // 0–95 or 0–100 depending on backend
   explanation: string;
-  ai_raw_response?: string;
+  ai_raw_response?: string | null;
 };
 
 // ========== API base ==========
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 
-export async function getMatches(profile: any) {
-  const res = await fetch(`${API_URL}/match_all`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(profile),
-  });
-  return res.json();
+function requireApiUrl(): string {
+  if (!API_URL) {
+    throw new Error(
+      "VITE_API_URL is not set. In dev, add it to Frontend/.env. In prod, set it in Vercel Project → Settings → Environment Variables."
+    );
+  }
+  return API_URL;
 }
 
-// ========== Backend call ==========
-/**
- * Send profile to backend and receive AI-evaluated matches.
- */
+// ========== Backend calls ==========
+/** Single entry-point used by the app */
 export async function fetchMatches(profile: Profile): Promise<Match[]> {
-  const res = await fetch(`${API_BASE}/match_all`, {
+  const base = requireApiUrl();
+  const res = await fetch(`${base}/match_all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(profile),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Backend error ${res.status}: ${text}`);
+    const text = await res.text().catch(() => "");
+    throw new Error(`Backend error ${res.status}: ${text || res.statusText}`);
   }
 
   const data = await res.json();
-  return data.matches as Match[];
+  // expect shape: { matches: Match[] }
+  return (data?.matches ?? []) as Match[];
 }
 
+// Optional thin alias (kept for backward compatibility)
+export const getMatches = fetchMatches;
+
 // ========== Re-exports ==========
-/**
- * Export constants from mocks/seed.ts so UI components can import from lib/api.
- */
 export {
   HACKATHONS,
   ROLES,
-  SKILLS,
-  INTERESTS,
-  AVAILABILITY_OPTIONS,
-} from "../mocks/seed";
